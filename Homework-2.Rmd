@@ -1,0 +1,65 @@
+---
+title: "Homework 2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(usethis)
+library(tidyverse)
+library(tidymodels)
+library(ISLR)
+library(corrplot)
+library(usethis)
+use_git_config(user.name = "jeremAnd", user.email = "jeremiah623@live.com")
+```
+
+```{r}
+abData <- read.csv("abalone.csv")
+abData$age <- abData$rings+1.5
+abData
+hist(abData$age)
+```
+The majority of ablone fall between 7.5 and 15 years old
+
+```{r}
+set.seed(608)
+abSplit <- initial_split(abData, prop = 0.80,
+                                strata = age)
+abTrain <- training(abSplit)
+abTest <- testing(abSplit)
+abRecipe <- recipe(age ~ ., data = abTrain %>% select(-rings)) %>% step_dummy(all_nominal_predictors())  %>% step_interact(terms = ~ starts_with('type'):shucked_weight) %>% step_interact(terms = ~ longest_shell:diameter) %>% step_interact(terms = ~ shucked_weight:shell_weight) %>% step_normalize()
+summary(abRecipe)
+```
+We shouldn't include rings because our goal is to predict abalone age without cutting the shell open, and thus without counting the rings
+
+```{r}
+lm_model <- linear_reg() %>% 
+  set_engine("lm")
+lm_wflow <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(abRecipe)
+
+```
+
+
+```{r}
+lm_fit <- fit(lm_wflow, abTrain)
+femab <- data.frame(longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1, type = 'F')
+predict(lm_fit, new_data = femab)
+```
+
+```{r}
+abRes <- predict(lm_fit, new_data = abTrain %>% select(-age))
+abRes <- bind_cols(abRes, abTrain %>% select(age))
+rmse(abRes, truth = age, estimate = .pred)
+abMetrics <- metric_set(rmse, rsq, mae)
+abMetrics(abRes, truth = age, 
+                estimate = .pred)
+
+```
+
+R^2 is about .55 so about 55% of age can be explained by the predictor variables which means that my model is not doing to good.
